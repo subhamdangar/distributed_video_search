@@ -15,6 +15,7 @@ ENV/
 *.log
 *.sqlite3
 *.sqlite
+db/
 
 # IDE settings
 .vscode/

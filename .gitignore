@@ -14,6 +14,7 @@ ENV/
 # Logs and databases
 *.log
 *.sqlite3
+*.sqlite
 
 # IDE settings
 .vscode/
@@ -26,3 +27,6 @@ ENV/
 build/
 dist/
 *.egg-info/
+
+# databases
+*.db

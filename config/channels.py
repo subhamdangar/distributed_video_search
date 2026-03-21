@@ -101,10 +101,10 @@ SUBJECT_CHANNELS = {
 # ──────────────────────────────────────────────────────────────
 
 # Maximum number of recent videos to fetch per channel
-MAX_VIDEOS_PER_CHANNEL = 8
+MAX_VIDEOS_PER_CHANNEL = 15
 
 # Maximum Dask workers for parallel execution
-MAX_DASK_WORKERS = 6
+MAX_DASK_WORKERS = 8
 
 # Semantic cache similarity threshold (cosine)
 # Queries with similarity >= this value are considered cache hits

@@ -334,7 +334,7 @@ import json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
-def setup_logging(verbose: bool = False):
+def setup_logging(verbose: bool = True):
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(
         level=level,
@@ -386,7 +386,9 @@ def print_results(result: dict):
         print(f"Similarity: {result.get('cache_similarity')}\n")
 
         for r in result.get("results", []):
-            print(f"{r.get('title')}")
+            print(f"[{r.get('rank')}] {r.get('title')}")
+            print(f"Channel: {r.get('channel')}")
+            print(f"Link: {r.get('timestamp_link')}")
             print(f"{r.get('snippet')}")
             print("-" * 50)
 

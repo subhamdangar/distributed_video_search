@@ -29,6 +29,16 @@ MATHEMATICS_CHANNELS = [
         "channel_id": "UC4a-Gbdw7vOaccHmFo40b9g",
         "language": "en",
     },
+    {
+        "name": "Vedantu JEE Made Ejee",
+        "channel_id": "UC91RZv71f8p0VV2gaFI07pg",
+        "language": "hi",
+    },
+    {
+        "name": "Physics Wallah - Alakh Pandey",
+        "channel_id": "UCiGyWN6DEbnj2alu7iapuKQ",
+        "language": "hi",
+    },
 ]
 
 # ──────────────────────────────────────────────────────────────
@@ -50,6 +60,7 @@ COMPUTER_SCIENCE_CHANNELS = [
         "channel_id": "UCnEknCMO52EU0d4wYR5CJDQ",
         "language": "en",
     },
+    
 ]
 
 # ──────────────────────────────────────────────────────────────
@@ -57,8 +68,8 @@ COMPUTER_SCIENCE_CHANNELS = [
 # ──────────────────────────────────────────────────────────────
 PHYSICS_CHANNELS = [
     {
-        "name": "Physics Wallah",
-        "channel_id": "UCHOPs2hX3WCaVxVF4FmtSDg",
+        "name": "Physics Wallah - Alakh Pandey",
+        "channel_id": "UCiGyWN6DEbnj2alu7iapuKQ",
         "language": "hi",
     },
     {
@@ -66,21 +77,37 @@ PHYSICS_CHANNELS = [
         "channel_id": "UCEBb1b_L6zDS3xTUrIALZOw",
         "language": "en",
     },
+    {
+        "name": "Vedantu JEE Made Ejee",
+        "channel_id": "UC91RZv71f8p0VV2gaFI07pg",
+        "language": "hi",
+    },
 ]
 
 # ──────────────────────────────────────────────────────────────
 # Node 4: Chemistry
 # ──────────────────────────────────────────────────────────────
 CHEMISTRY_CHANNELS = [
-    {
-        "name": "Unacademy",
-        "channel_id": "UCBGIijVBNZRXhj6XI7KBNlw",
-        "language": "hi",
-    },
+
     {
         "name": "Khan Academy",
         "channel_id": "UC4a-Gbdw7vOaccHmFo40b9g",
         "language": "en",
+    },
+    {
+        "name": "The Organic Chemistry Tutor",
+        "channel_id": "UCEWpbFLzoYGPfuWUMFPSaoA",
+        "language": "en",
+    },
+    {
+        "name": "Vedantu JEE Made Ejee",
+        "channel_id": "UC91RZv71f8p0VV2gaFI07pg",
+        "language": "hi",
+    },
+    {
+        "name": "Physics Wallah - Alakh Pandey",
+        "channel_id": "UCiGyWN6DEbnj2alu7iapuKQ",
+        "language": "hi",
     },
 ]
 

@@ -12,7 +12,7 @@ import logging
 import numpy as np
 from utils.cleaning import clean_query
 from utils.embeddings import embed_text
-
+# 
 logger = logging.getLogger(__name__)
 
 

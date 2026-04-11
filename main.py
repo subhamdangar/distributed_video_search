@@ -417,7 +417,7 @@ def main():
 
     # ── Load orchestrator ─────────────────────────
     from agents.orchestrator import Orchestrator
-    orchestrator = Orchestrator()
+    orchestrator = Orchestrator()             #-----------------------------------------> Call the orchestrator.py
 
     # ── If query passed via CLI ───────────────────
     if args.query:

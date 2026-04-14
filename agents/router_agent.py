@@ -167,7 +167,7 @@ class RouterAgent:
                      f"{dict(zip(self._subject_names, similarities.round(4)))}")
 
         # If confident enough, return the best match
-        if best_score >= 0.35:
+        if best_score >= 0.40:
             result = [self._subject_names[best_idx]]
             logger.info(f"RouterAgent: Embedding match (score={best_score:.4f}) → {result}")
             return result

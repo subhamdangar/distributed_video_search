@@ -34,6 +34,15 @@ logger = logging.getLogger(__name__)
 class Orchestrator:
     """
     Controls the full search pipeline with distributed execution via Dask.
+
+    In distributed mode (DASK_SCHEDULER_ADDRESS is set):
+      - Client connects to the scheduler once on __init__
+      - Tasks are submitted to remote workers via client.submit()
+      - Workers execute process_channel() on different machines
+      - Results are gathered back to the client
+
+    In local mode (DASK_SCHEDULER_ADDRESS is None):
+      - Falls back to local threaded scheduler
     """
 
     def __init__(self):
@@ -41,6 +50,30 @@ class Orchestrator:
         self.cache_agent = CacheAgent()
         self.router_agent = RouterAgent()
         self.ranking_agent = RankingAgent()
+
+        # ── Dask Distributed Client (persistent connection) ──
+        from config.channels import DASK_SCHEDULER_ADDRESS
+        self._dask_client = None
+        self._distributed_mode = False
+
+        if DASK_SCHEDULER_ADDRESS:
+            try:
+                from dask.distributed import Client
+                self._dask_client = Client(DASK_SCHEDULER_ADDRESS)
+                workers = self._dask_client.scheduler_info()["workers"]
+                self._distributed_mode = True
+                logger.info(
+                    f"Orchestrator: Connected to Dask scheduler at {DASK_SCHEDULER_ADDRESS} "
+                    f"| Workers: {len(workers)} "
+                    f"| Worker addresses: {list(workers.keys())}"
+                )
+            except Exception as e:
+                logger.warning(f"Orchestrator: Failed to connect to Dask scheduler: {e}")
+                logger.warning("Orchestrator: Falling back to local threaded execution.")
+                self._distributed_mode = False
+        else:
+            logger.info("Orchestrator: Running in LOCAL mode (no scheduler address set).")
+
         logger.info("Orchestrator: All agents initialized.")
 
     def search(self, raw_query: str) -> dict:
@@ -132,25 +165,49 @@ class Orchestrator:
         logger.info("STAGE 4: Dask Distributed Execution")
         logger.info("=" * 60)
 
-        # Configure Dask for local threaded execution (CPU-friendly)
-        dask.config.set(scheduler='synchronous')  # Safe for CPU; use 'threads' for parallel
-
-        # Create delayed tasks for each channel
-        delayed_tasks = []
-        for channel in unique_channels:
-            task = delayed(process_channel)(channel, cleaned_query, query_embedding)
-            delayed_tasks.append(task)
-
-        logger.info(f"Created {len(delayed_tasks)} Dask delayed tasks.")
-
-        # Execute all tasks (Dask handles parallelism)
+        # ── Execute tasks ─────────────────────────────────────
         try:
-            # Use threaded scheduler with limited workers
-            channel_results = compute(
-                *delayed_tasks,
-                scheduler="threads",
-                num_workers=min(MAX_DASK_WORKERS, len(delayed_tasks)),
-            )
+            if self._distributed_mode and self._dask_client:
+                # ═══ DISTRIBUTED MODE ═══
+                # Submit each channel as a task to the Dask scheduler.
+                # The scheduler distributes tasks to worker machines.
+                # client.submit() → Future, client.gather() → results
+                client = self._dask_client
+
+                workers = client.scheduler_info()["workers"]
+                logger.info(
+                    f"Submitting {len(unique_channels)} tasks to "
+                    f"{len(workers)} distributed workers"
+                )
+
+                futures = []
+                for channel in unique_channels:
+                    future = client.submit(
+                        process_channel, channel, cleaned_query, query_embedding
+                    )
+                    futures.append(future)
+
+                # Gather results from all workers (blocks until done)
+                channel_results = client.gather(futures)
+
+                logger.info(
+                    f"All {len(channel_results)} tasks completed on workers."
+                )
+            else:
+                # ═══ LOCAL MODE ═══
+                # Use Dask delayed + threaded scheduler on this machine
+                delayed_tasks = []
+                for channel in unique_channels:
+                    task = delayed(process_channel)(channel, cleaned_query, query_embedding)
+                    delayed_tasks.append(task)
+
+                logger.info(f"Created {len(delayed_tasks)} Dask delayed tasks (local).")
+
+                channel_results = compute(
+                    *delayed_tasks,
+                    scheduler="threads",
+                    num_workers=min(MAX_DASK_WORKERS, len(delayed_tasks)),
+                )
         except Exception as e:
             logger.error(f"Dask execution error: {e}")
             # Fallback: execute sequentially
@@ -247,6 +304,7 @@ class Orchestrator:
                 "timestamp": r.get("timestamp_str", "00:00:00"),
                 "snippet": r.get("chunk_text", "")[:200],
                 "similarity_score": round(r.get("similarity", 0), 4),
+                "final_score": round(r.get("final_score", 0), 4),
                 "view_count": r.get("view_count", 0),
             })
         return formatted
@@ -267,15 +325,18 @@ class Orchestrator:
 
     def _evaluation_scores(self, results: list[dict]) -> dict:
         """
-        Simple evaluation: print similarity scores for transparency.
+        Evaluation: print similarity + final_score for transparency.
         """
         if not results:
             return {}
-        scores = [r.get("similarity", 0) for r in results]
+        sim_scores = [r.get("similarity", 0) for r in results]
+        final_scores = [r.get("final_score", 0) for r in results]
         return {
-            "mean_similarity": round(sum(scores) / len(scores), 4),
-            "max_similarity": round(max(scores), 4),
-            "min_similarity": round(min(scores), 4),
+            "mean_similarity": round(sum(sim_scores) / len(sim_scores), 4),
+            "max_similarity": round(max(sim_scores), 4),
+            "min_similarity": round(min(sim_scores), 4),
+            "mean_final_score": round(sum(final_scores) / len(final_scores), 4),
+            "max_final_score": round(max(final_scores), 4),
         }
 
     def _error_result(self, message: str, start_time: float) -> dict:

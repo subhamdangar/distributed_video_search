@@ -127,15 +127,39 @@ SUBJECT_CHANNELS = {
 # System-level configuration constants
 # ──────────────────────────────────────────────────────────────
 
-# Maximum number of recent videos to fetch per channel
+# Maximum videos per channel (used as a reference; actual fetching uses NO limit)
+# The metadata filtering stage selects top-K from ALL fetched videos.
 MAX_VIDEOS_PER_CHANNEL = 15
 
-# Maximum Dask workers for parallel execution
+# Maximum Dask workers for parallel execution (local mode only)
 MAX_DASK_WORKERS = 8
+
+# ──────────────────────────────────────────────────────────────
+# Dask Distributed Configuration
+# ──────────────────────────────────────────────────────────────
+# Set to the scheduler address for multi-machine distributed execution.
+# Set to None for local-only mode (threads on this machine).
+#
+# HOW TO USE IN A LAB:
+#
+#   Machine 1 (Scheduler + Client):
+#     $ dask scheduler
+#     → Scheduler running at tcp://MACHINE_1_IP:8786
+#     → Dashboard at http://MACHINE_1_IP:8787
+#
+#   Machine 2, 3, 4... (Workers):
+#     $ dask worker tcp://MACHINE_1_IP:8786
+#
+#   Then set:
+#     DASK_SCHEDULER_ADDRESS = "tcp://MACHINE_1_IP:8786"
+#
+# The client (main.py) ALSO runs on Machine 1.
+# ──────────────────────────────────────────────────────────────
+DASK_SCHEDULER_ADDRESS = None
 
 # Semantic cache similarity threshold (cosine)
 # Queries with similarity >= this value are considered cache hits
-CACHE_SIMILARITY_THRESHOLD = 0.88
+CACHE_SIMILARITY_THRESHOLD = 0.89
 
 # Number of top results by similarity before ranking by views
 TOP_SIMILARITY_RESULTS = 10

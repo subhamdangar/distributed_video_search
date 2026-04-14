@@ -368,7 +368,7 @@ def print_results(result: dict):
             print(f"Channel: {r.get('channel')}")
             print(f"Timestamp: {r.get('timestamp')}")
             print(f"Link: {r.get('timestamp_link')}")
-            print(f"Score: {r.get('similarity_score')}")
+            print(f"Score: {r.get('similarity_score')}  |  Final: {r.get('final_score')}")
             print(f"Views: {r.get('view_count')}")
             print(f"Snippet: {r.get('snippet')}")
             print("-" * 50)
@@ -446,10 +446,12 @@ def main():
 
         result = orchestrator.search(query)
 
-        if args.json:
-            print(json.dumps(result, indent=2, ensure_ascii=False))
-        else:
-            print_results(result)
+        # if args.json:
+        #     print(json.dumps(result, indent=2, ensure_ascii=False))
+        # else:
+        #     print_results(result)
+        
+        print_results(result)
 
 
 if __name__ == "__main__":

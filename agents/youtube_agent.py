@@ -30,6 +30,19 @@ logger = logging.getLogger(__name__)
 _ip_blocked = False
 
 
+def _compute_keyword_score(query: str, text: str) -> float:
+    """
+    Compute a simple keyword overlap score between the query and a text.
+    Returns a value in [0, 1] based on what fraction of query words appear in the text.
+    """
+    if not query or not text:
+        return 0.0
+    query_words = set(query.lower().split())
+    text_lower = text.lower()
+    matches = sum(1 for w in query_words if w in text_lower)
+    return matches / max(len(query_words), 1)
+
+
 def _extract_videos_from_result(result: dict, channel_name: str) -> list[dict]:
     """Extract video metadata from a yt_dlp result dict."""
     videos = []
@@ -60,39 +73,63 @@ def _extract_videos_from_result(result: dict, channel_name: str) -> list[dict]:
 
 def fetch_channel_videos(channel: dict, search_query: str = "") -> list[dict]:
     """
-    Fetch recent videos from a YouTube channel using yt_dlp.
-    Uses a DUAL strategy: search + channel uploads.
+    Fetch ALL videos from a YouTube channel using yt_dlp.
+
+    NO playlistend limit — fetches complete channel metadata.
+    The metadata filtering stage (process_channel Stage 1) will select
+    the top-K most relevant candidates for deep processing.
+
+    DUAL STRATEGY (both stay WITHIN the predefined channel):
+      A) Search WITHIN the channel using /search?query=...
+         → finds topic-specific videos even if not recent
+         → this is NOT ytsearch (global search) — it's channel-scoped
+      B) Fetch ALL uploads from /videos (no limit)
+         → ensures full coverage of the channel
+
+    Combined, we get complete channel coverage.
     """
     import yt_dlp
+    from urllib.parse import quote_plus
 
     channel_name = channel["name"]
     channel_id = channel["channel_id"]
-    logger.info(f"YouTubeAgent: Fetching videos from '{channel_name}' (ID: {channel_id})")
+    logger.info(f"YouTubeAgent: Fetching ALL videos from '{channel_name}' (ID: {channel_id})")
 
+    # NO playlistend — fetch everything
     ydl_opts = {
         "quiet": True,
         "no_warnings": True,
         "extract_flat": True,
         "force_generic_extractor": False,
-        "playlistend": MAX_VIDEOS_PER_CHANNEL,
         "ignoreerrors": True,
     }
 
     all_videos = {}
 
-    # Strategy A: Search with query + channel name
+    # ── Strategy A: Search WITHIN the channel (NOT global ytsearch) ──
+    # URL: https://www.youtube.com/channel/{id}/search?query=...
+    # This only returns videos from THIS specific channel.
     if search_query:
-        search_url = f"ytsearch{MAX_VIDEOS_PER_CHANNEL}:{search_query} {channel_name}"
+        channel_search_url = (
+            f"https://www.youtube.com/channel/{channel_id}"
+            f"/search?query={quote_plus(search_query)}"
+        )
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                result = ydl.extract_info(search_url, download=False)
+                result = ydl.extract_info(channel_search_url, download=False)
                 for v in _extract_videos_from_result(result, channel_name):
                     all_videos[v["video_id"]] = v
-            logger.info(f"YouTubeAgent: Search found {len(all_videos)} videos for '{channel_name}'")
-        except Exception as e:
-            logger.debug(f"YouTubeAgent: Search failed for '{channel_name}': {e}")
 
-    # Strategy B: Channel's recent uploads
+            logger.info(
+                f"YouTubeAgent: Channel search found {len(all_videos)} videos "
+                f"for '{channel_name}' (query='{search_query}')"
+            )
+        except Exception as e:
+            logger.debug(
+                f"YouTubeAgent: Channel search failed for '{channel_name}': {e}"
+            )
+
+    # ── Strategy B: ALL uploads from the channel (NO limit) ──
     channel_url = f"https://www.youtube.com/channel/{channel_id}/videos"
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -102,11 +139,15 @@ def fetch_channel_videos(channel: dict, search_query: str = "") -> list[dict]:
                 if v["video_id"] not in all_videos:
                     all_videos[v["video_id"]] = v
             added = len(all_videos) - count_before
-            logger.info(f"YouTubeAgent: Channel uploads added {added} new videos for '{channel_name}'")
+            logger.info(
+                f"YouTubeAgent: Channel uploads added {added} new videos "
+                f"for '{channel_name}' (total: {len(all_videos)})"
+            )
     except Exception as e:
         logger.debug(f"YouTubeAgent: Channel uploads failed for '{channel_name}': {e}")
 
-    videos = list(all_videos.values())[:MAX_VIDEOS_PER_CHANNEL * 2]
+    # NO slicing — return ALL videos. Metadata filter will select top-K.
+    videos = list(all_videos.values())
     logger.info(f"YouTubeAgent: Total {len(videos)} unique videos from '{channel_name}'")
     return videos
 
@@ -214,8 +255,15 @@ def process_video_with_transcript(video: dict, query_embedding: np.ndarray) -> l
     duration = video.get("duration", 0)
     total_chars = sum(len(c["text"]) for c in chunks)
 
+    # ── FILTER: discard chunks below minimum similarity ──
+    MIN_CHUNK_SIMILARITY = 0.30
+
     results = []
     for i, chunk_data in enumerate(chunks):
+        sim = float(similarities[i])
+        if sim < MIN_CHUNK_SIMILARITY:
+            continue  # Skip weak chunks early
+
         if duration > 0 and total_chars > 0:
             timestamp_sec = int((chunk_data["start_char"] / total_chars) * duration)
         else:
@@ -235,7 +283,7 @@ def process_video_with_transcript(video: dict, query_embedding: np.ndarray) -> l
             "timestamp_sec": timestamp_sec,
             "timestamp_str": timestamp_str,
             "timestamp_url": f"{video['url']}&t={timestamp_sec}s",
-            "similarity": float(similarities[i]),
+            "similarity": sim,
             "match_type": "transcript",
         })
 
@@ -366,10 +414,17 @@ def process_video_with_chapters(video: dict, query_embedding: np.ndarray) -> lis
 
     similarities = compute_similarity(query_embedding, chapter_embeddings)
 
+    # ── FILTER: discard weak chapter matches ──
+    MIN_CHAPTER_SIMILARITY = 0.30
+
     results = []
     for i, ch in enumerate(chapters):
         if i >= len(similarities):
             break
+
+        sim = float(similarities[i])
+        if sim < MIN_CHAPTER_SIMILARITY:
+            continue  # Skip weak chapter matches early
 
         title = ch.get("title", "")
         if not title.strip():
@@ -390,7 +445,7 @@ def process_video_with_chapters(video: dict, query_embedding: np.ndarray) -> lis
             "timestamp_sec": timestamp_sec,
             "timestamp_str": timestamp_str,
             "timestamp_url": f"{video['url']}&t={timestamp_sec}s",
-            "similarity": float(similarities[i]),
+            "similarity": sim,
             "match_type": "chapter",
         })
 
@@ -434,20 +489,140 @@ def process_video_title_only(video: dict, query_embedding: np.ndarray) -> dict:
 # MAIN ENTRY POINT: process_channel (called by Dask)
 # ═══════════════════════════════════════════════════════════════════════
 
+# def process_channel(channel: dict, search_query: str,
+#                     query_embedding: np.ndarray) -> list[dict]:
+#     """
+#     Process an entire channel with 3-tier fallback:
+#       1. Try transcript-based matching (precise timestamps)
+#       2. If IP blocked → try chapter-based matching (accurate timestamps)
+#       3. Last resort → title-based matching (no timestamps)
+#     """
+#     logger.info(f"YouTubeAgent: Processing channel '{channel['name']}'")
+
+#     videos = fetch_channel_videos(channel, search_query)
+#     if not videos:
+#         logger.info(f"YouTubeAgent: No videos found for '{channel['name']}'")
+#         return []
+
+#     all_results = []
+#     tier1_count = 0  # transcript
+#     tier2_count = 0  # chapter
+#     tier3_count = 0  # title
+
+#     for video in videos:
+#         try:
+#             # TIER 1: Try transcript
+#             results = process_video_with_transcript(video, query_embedding)
+#             if results:
+#                 tier1_count += 1
+#                 all_results.extend(results)
+#                 continue
+
+#             # TIER 2: Try chapters (works even when YouTube blocks transcripts)
+#             results = process_video_with_chapters(video, query_embedding)
+#             if results:
+#                 tier2_count += 1
+#                 all_results.extend(results)
+#                 continue
+
+#             # TIER 3: Title-based fallback
+#             result = process_video_title_only(video, query_embedding)
+#             if result["similarity"] > 0.20:
+#                 tier3_count += 1
+#                 all_results.append(result)
+
+#         except Exception as e:
+#             logger.error(f"YouTubeAgent: Error processing '{video.get('title', '?')}': {e}")
+#             continue
+
+#     return all_results
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MAIN ENTRY POINT: process_channel (called by Dask)
+# ═══════════════════════════════════════════════════════════════════════
+
 def process_channel(channel: dict, search_query: str,
                     query_embedding: np.ndarray) -> list[dict]:
     """
-    Process an entire channel with 3-tier fallback:
-      1. Try transcript-based matching (precise timestamps)
-      2. If IP blocked → try chapter-based matching (accurate timestamps)
-      3. Last resort → title-based matching (no timestamps)
+    Process an entire channel with 2-stage retrieval + 3-tier fallback:
+
+      Stage 1: Metadata-based quick filtering
+          - Use title + description embedding to score all videos
+          - Compute keyword overlap score
+          - Drop videos with quick_score < 0.25
+          - Select top 15 candidates
+
+      Stage 2: Deep processing with fallback
+          1. Try transcript-based matching (precise timestamps)
+          2. If IP blocked → try chapter-based matching (accurate timestamps)
+          3. Last resort → title-based matching (no timestamps, threshold 0.35)
     """
+
     logger.info(f"YouTubeAgent: Processing channel '{channel['name']}'")
 
     videos = fetch_channel_videos(channel, search_query)
     if not videos:
         logger.info(f"YouTubeAgent: No videos found for '{channel['name']}'")
         return []
+
+    # ═══════════════════════════════════════════════════════════════
+    # STAGE 1: QUICK METADATA FILTERING (keyword + embedding)
+    # Scored against ALL channel videos, then top-K selected.
+    # ═══════════════════════════════════════════════════════════════
+    from utils.embeddings import embed_texts
+    from utils.similarity import compute_similarity
+
+    logger.info(
+        f"YouTubeAgent: Scoring {len(videos)} videos from '{channel['name']}' "
+        f"(full channel catalog)"
+    )
+
+    # Prepare lightweight text (metadata only)
+    video_texts = [
+        v["title"] + " " + v.get("description", "")[:200]
+        for v in videos
+    ]
+
+    video_embeddings = embed_texts(video_texts)
+
+    if video_embeddings.size == 0:
+        return []
+
+    similarities = compute_similarity(query_embedding, video_embeddings)
+
+    # Attach quick score + keyword score
+    for i, v in enumerate(videos):
+        v["quick_score"] = float(similarities[i])
+        v["keyword_score"] = _compute_keyword_score(
+            search_query, v["title"] + " " + v.get("description", "")[:200]
+        )
+
+    # Sort by relevance
+    videos = sorted(videos, key=lambda x: x["quick_score"], reverse=True)
+
+    # ── FILTER: drop videos with very low metadata relevance ──
+    MIN_QUICK_SCORE = 0.25
+    videos = [v for v in videos if v["quick_score"] >= MIN_QUICK_SCORE]
+
+    if not videos:
+        logger.info(f"YouTubeAgent: No videos passed metadata filter for '{channel['name']}'")
+        return []
+
+    # Keep top K candidates for deep processing
+    TOP_K = 20
+    videos = videos[:TOP_K]
+
+    logger.info(
+        f"YouTubeAgent: Selected top {len(videos)} from full catalog after metadata filtering "
+        f"(best score = {videos[0]['quick_score']:.4f}, "
+        f"best keyword = {max(v['keyword_score'] for v in videos):.2f})"
+    )
+
+    # ═══════════════════════════════════════════════════════════════
+    # STAGE 2: DEEP PROCESSING (3-TIER LOGIC)
+    # ═══════════════════════════════════════════════════════════════
 
     all_results = []
     tier1_count = 0  # transcript
@@ -460,27 +635,46 @@ def process_channel(channel: dict, search_query: str,
             results = process_video_with_transcript(video, query_embedding)
             if results:
                 tier1_count += 1
+
+                for r in results:
+                    r["title_similarity"] = video["quick_score"]
+                    r["keyword_score"] = video["keyword_score"]
+
                 all_results.extend(results)
                 continue
 
-            # TIER 2: Try chapters (works even when YouTube blocks transcripts)
+            # TIER 2: Try chapters
             results = process_video_with_chapters(video, query_embedding)
             if results:
                 tier2_count += 1
+
+                for r in results:
+                    r["title_similarity"] = video["quick_score"]
+                    r["keyword_score"] = video["keyword_score"]
+
                 all_results.extend(results)
                 continue
 
-            # TIER 3: Title-based fallback
+            # TIER 3: Title-based fallback (stricter threshold)
             result = process_video_title_only(video, query_embedding)
-            if result["similarity"] > 0.15:
+            if result["similarity"] > 0.35:
                 tier3_count += 1
+
+                result["title_similarity"] = video["quick_score"]
+                result["keyword_score"] = video["keyword_score"]
+
                 all_results.append(result)
 
         except Exception as e:
             logger.error(f"YouTubeAgent: Error processing '{video.get('title', '?')}': {e}")
             continue
 
-    logger.info(f"YouTubeAgent: '{channel['name']}' → "
-                f"T1(transcript)={tier1_count}, T2(chapters)={tier2_count}, "
-                f"T3(title)={tier3_count}, total={len(all_results)} results")
+    logger.info(
+        f"YouTubeAgent: '{channel['name']}' → "
+        f"T1(transcript)={tier1_count}, "
+        f"T2(chapters)={tier2_count}, "
+        f"T3(title)={tier3_count}, "
+        f"total={len(all_results)} results"
+    )
+
     return all_results

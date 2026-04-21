@@ -102,6 +102,7 @@ def fetch_channel_videos(channel: dict, search_query: str = "") -> list[dict]:
         "extract_flat": True,
         "force_generic_extractor": False,
         "ignoreerrors": True,
+        # "cookiefile": "cookies.txt", 
     }
 
     all_videos = {}
@@ -309,6 +310,7 @@ def fetch_video_chapters(video_id: str) -> list[dict]:
         "no_warnings": True,
         "skip_download": True,
         "ignoreerrors": True,
+        # "cookiefile": "cookies.txt",
     }
 
     try:
@@ -543,23 +545,179 @@ def process_video_title_only(video: dict, query_embedding: np.ndarray) -> dict:
 # MAIN ENTRY POINT: process_channel (called by Dask)
 # ═══════════════════════════════════════════════════════════════════════
 
+# def process_channel(channel: dict, search_query: str,
+#                     query_embedding: np.ndarray) -> list[dict]:
+#     """
+#     Process an entire channel with 2-stage retrieval + 3-tier fallback:
+
+#       Stage 1: Metadata-based quick filtering
+#           - Use title + description embedding to score all videos
+#           - Compute keyword overlap score
+#           - Drop videos with quick_score < 0.25
+#           - Select top 15 candidates
+
+#       Stage 2: Deep processing with fallback
+#           1. Try transcript-based matching (precise timestamps)
+#           2. If IP blocked → try chapter-based matching (accurate timestamps)
+#           3. Last resort → title-based matching (no timestamps, threshold 0.35)
+#     """
+
+#     logger.info(f"YouTubeAgent: Processing channel '{channel['name']}'")
+
+#     videos = fetch_channel_videos(channel, search_query)
+#     if not videos:
+#         logger.info(f"YouTubeAgent: No videos found for '{channel['name']}'")
+#         return []
+
+#     # ═══════════════════════════════════════════════════════════════
+#     # STAGE 1: QUICK METADATA FILTERING (keyword + embedding)
+#     # Scored against ALL channel videos, then top-K selected.
+#     # ═══════════════════════════════════════════════════════════════
+#     from utils.embeddings import embed_texts
+#     from utils.similarity import compute_similarity
+
+#     logger.info(
+#         f"YouTubeAgent: Scoring {len(videos)} videos from '{channel['name']}' "
+#         f"(full channel catalog)"
+#     )
+
+#     # Prepare lightweight text (metadata only)
+#     video_texts = [
+#         v["title"] + " " + v.get("description", "")[:200]
+#         for v in videos
+#     ]
+
+#     video_embeddings = embed_texts(video_texts)
+
+#     if video_embeddings.size == 0:
+#         return []
+
+#     similarities = compute_similarity(query_embedding, video_embeddings)
+
+#     # Attach quick score + keyword score
+#     for i, v in enumerate(videos):
+#         v["quick_score"] = float(similarities[i])
+#         v["keyword_score"] = _compute_keyword_score(
+#             search_query, v["title"] + " " + v.get("description", "")[:200]
+#         )
+
+#     # Sort by relevance
+#     videos = sorted(videos, key=lambda x: x["quick_score"], reverse=True)
+
+#     # ── FILTER: drop videos with very low metadata relevance ──
+#     MIN_QUICK_SCORE = 0.25
+#     videos = [v for v in videos if v["quick_score"] >= MIN_QUICK_SCORE]
+
+#     if not videos:
+#         logger.info(f"YouTubeAgent: No videos passed metadata filter for '{channel['name']}'")
+#         return []
+
+#     # Keep top K candidates for deep processing
+#     TOP_K = 20
+#     videos = videos[:TOP_K]
+
+#     logger.info(
+#         f"YouTubeAgent: Selected top {len(videos)} from full catalog after metadata filtering "
+#         f"(best score = {videos[0]['quick_score']:.4f}, "
+#         f"best keyword = {max(v['keyword_score'] for v in videos):.2f})"
+#     )
+
+#     # ═══════════════════════════════════════════════════════════════
+#     # STAGE 2: DEEP PROCESSING (3-TIER LOGIC)
+#     # ═══════════════════════════════════════════════════════════════
+
+#     all_results = []
+#     tier1_count = 0  # transcript
+#     tier2_count = 0  # chapter
+#     tier3_count = 0  # title
+
+#     for video in videos:
+#         try:
+#             # TIER 1: Try transcript
+#             results = process_video_with_transcript(video, query_embedding)
+#             if results:
+#                 tier1_count += 1
+
+#                 for r in results:
+#                     r["title_similarity"] = video["quick_score"]
+#                     r["keyword_score"] = video["keyword_score"]
+
+#                 all_results.extend(results)
+#                 continue
+
+#             # TIER 2: Try chapters
+#             results = process_video_with_chapters(video, query_embedding)
+#             if results:
+#                 tier2_count += 1
+
+#                 for r in results:
+#                     r["title_similarity"] = video["quick_score"]
+#                     r["keyword_score"] = video["keyword_score"]
+
+#                 all_results.extend(results)
+#                 continue
+
+#             # TIER 3: Title-based fallback (stricter threshold)
+#             result = process_video_title_only(video, query_embedding)
+#             if result["similarity"] > 0.35:
+#                 tier3_count += 1
+
+#                 result["title_similarity"] = video["quick_score"]
+#                 result["keyword_score"] = video["keyword_score"]
+
+#                 all_results.append(result)
+
+#         except Exception as e:
+#             logger.error(f"YouTubeAgent: Error processing '{video.get('title', '?')}': {e}")
+#             continue
+
+#     logger.info(
+#         f"YouTubeAgent: '{channel['name']}' → "
+#         f"T1(transcript)={tier1_count}, "
+#         f"T2(chapters)={tier2_count}, "
+#         f"T3(title)={tier3_count}, "
+#         f"total={len(all_results)} results"
+#     )
+
+#     return all_results
+
+
+
 def process_channel(channel: dict, search_query: str,
                     query_embedding: np.ndarray) -> list[dict]:
     """
-    Process an entire channel with 2-stage retrieval + 3-tier fallback:
-
-      Stage 1: Metadata-based quick filtering
-          - Use title + description embedding to score all videos
-          - Compute keyword overlap score
-          - Drop videos with quick_score < 0.25
-          - Select top 15 candidates
-
-      Stage 2: Deep processing with fallback
-          1. Try transcript-based matching (precise timestamps)
-          2. If IP blocked → try chapter-based matching (accurate timestamps)
-          3. Last resort → title-based matching (no timestamps, threshold 0.35)
+    Process an entire channel with 2-stage retrieval + 3-tier fallback.
     """
 
+    # ─────────────────────────────────────────────────────────────
+    # 🔴 WORKER DEBUG BLOCK (proof of execution on worker machine)
+    # ─────────────────────────────────────────────────────────────
+    import socket
+    import os
+    import time
+
+    try:
+        from dask.distributed import get_worker
+        worker = get_worker()
+        worker_id = worker.address
+    except Exception:
+        worker_id = "LOCAL (not distributed)"
+
+    hostname = socket.gethostname()
+    pid = os.getpid()
+
+    print(f"""
+================= WORKER EXECUTION =================
+Host        : {hostname}
+PID         : {pid}
+Worker ID   : {worker_id}
+Channel     : {channel['name']}
+===================================================
+""")
+
+    start_time = time.time()
+
+    # ─────────────────────────────────────────────────────────────
     logger.info(f"YouTubeAgent: Processing channel '{channel['name']}'")
 
     videos = fetch_channel_videos(channel, search_query)
@@ -567,19 +725,14 @@ def process_channel(channel: dict, search_query: str,
         logger.info(f"YouTubeAgent: No videos found for '{channel['name']}'")
         return []
 
-    # ═══════════════════════════════════════════════════════════════
-    # STAGE 1: QUICK METADATA FILTERING (keyword + embedding)
-    # Scored against ALL channel videos, then top-K selected.
-    # ═══════════════════════════════════════════════════════════════
+    # ─────────────────────────────────────────────────────────────
+    # STAGE 1: METADATA FILTERING
+    # ─────────────────────────────────────────────────────────────
     from utils.embeddings import embed_texts
     from utils.similarity import compute_similarity
 
-    logger.info(
-        f"YouTubeAgent: Scoring {len(videos)} videos from '{channel['name']}' "
-        f"(full channel catalog)"
-    )
+    print(f"[WORKER] ({hostname}) → Stage 1 START for {channel['name']} | Total videos: {len(videos)}")
 
-    # Prepare lightweight text (metadata only)
     video_texts = [
         v["title"] + " " + v.get("description", "")[:200]
         for v in videos
@@ -592,17 +745,14 @@ def process_channel(channel: dict, search_query: str,
 
     similarities = compute_similarity(query_embedding, video_embeddings)
 
-    # Attach quick score + keyword score
     for i, v in enumerate(videos):
         v["quick_score"] = float(similarities[i])
         v["keyword_score"] = _compute_keyword_score(
             search_query, v["title"] + " " + v.get("description", "")[:200]
         )
 
-    # Sort by relevance
     videos = sorted(videos, key=lambda x: x["quick_score"], reverse=True)
 
-    # ── FILTER: drop videos with very low metadata relevance ──
     MIN_QUICK_SCORE = 0.25
     videos = [v for v in videos if v["quick_score"] >= MIN_QUICK_SCORE]
 
@@ -610,71 +760,105 @@ def process_channel(channel: dict, search_query: str,
         logger.info(f"YouTubeAgent: No videos passed metadata filter for '{channel['name']}'")
         return []
 
-    # Keep top K candidates for deep processing
     TOP_K = 20
     videos = videos[:TOP_K]
 
-    logger.info(
-        f"YouTubeAgent: Selected top {len(videos)} from full catalog after metadata filtering "
-        f"(best score = {videos[0]['quick_score']:.4f}, "
-        f"best keyword = {max(v['keyword_score'] for v in videos):.2f})"
-    )
+    print(f"[WORKER] ({hostname}) → Stage 1 DONE for {channel['name']} | Selected: {len(videos)}")
 
-    # ═══════════════════════════════════════════════════════════════
-    # STAGE 2: DEEP PROCESSING (3-TIER LOGIC)
-    # ═══════════════════════════════════════════════════════════════
+    # ─────────────────────────────────────────────────────────────
+    # STAGE 2: DEEP PROCESSING
+    # ─────────────────────────────────────────────────────────────
+    print(f"[WORKER] ({hostname}) → Stage 2 START for {channel['name']}")
 
     all_results = []
-    tier1_count = 0  # transcript
-    tier2_count = 0  # chapter
-    tier3_count = 0  # title
+    tier1_count = 0
+    tier2_count = 0
+    tier3_count = 0
 
     for video in videos:
         try:
-            # TIER 1: Try transcript
+            # TIER 1
             results = process_video_with_transcript(video, query_embedding)
             if results:
                 tier1_count += 1
-
                 for r in results:
                     r["title_similarity"] = video["quick_score"]
                     r["keyword_score"] = video["keyword_score"]
-
                 all_results.extend(results)
                 continue
 
-            # TIER 2: Try chapters
+            # TIER 2
             results = process_video_with_chapters(video, query_embedding)
             if results:
                 tier2_count += 1
-
                 for r in results:
                     r["title_similarity"] = video["quick_score"]
                     r["keyword_score"] = video["keyword_score"]
-
                 all_results.extend(results)
                 continue
 
-            # TIER 3: Title-based fallback (stricter threshold)
+            # TIER 3
             result = process_video_title_only(video, query_embedding)
             if result["similarity"] > 0.35:
                 tier3_count += 1
-
                 result["title_similarity"] = video["quick_score"]
                 result["keyword_score"] = video["keyword_score"]
-
                 all_results.append(result)
 
         except Exception as e:
             logger.error(f"YouTubeAgent: Error processing '{video.get('title', '?')}': {e}")
             continue
 
-    logger.info(
-        f"YouTubeAgent: '{channel['name']}' → "
-        f"T1(transcript)={tier1_count}, "
-        f"T2(chapters)={tier2_count}, "
-        f"T3(title)={tier3_count}, "
-        f"total={len(all_results)} results"
-    )
+    # ─────────────────────────────────────────────────────────────
+    # FINAL SUMMARY (worker-side)
+    # ─────────────────────────────────────────────────────────────
+    elapsed = time.time() - start_time
+
+    print(f"""
+[WORKER COMPLETE]
+Host        : {hostname}
+Channel     : {channel['name']}
+T1 (transcript) : {tier1_count}
+T2 (chapters)   : {tier2_count}
+T3 (title)      : {tier3_count}
+Total       : {len(all_results)}
+Time        : {elapsed:.2f}s
+---------------------------------------------------
+""")
+    
+    # ─────────────────────────────────────────────
+    # ✅ ADD THIS BLOCK (FAISS STORE)
+    # ─────────────────────────────────────────────
+    
+    # try:
+    #     from utils.faiss_store import FAISSStore
+
+    #     # store = FAISSStore()
+    #     safe_name = channel['name'].replace(" ", "_")
+
+    #     store = FAISSStore(
+    #         index_path=f"data/{safe_name}.faiss",
+    #         meta_path=f"data/{safe_name}.json"
+    #     )
+
+    #     embeddings = []
+    #     metas = []
+
+    #     for r in all_results:
+    #         if "similarity" in r:  # ensure valid result
+    #             # reuse embedding logic (IMPORTANT: you need embedding here)
+    #             emb = embed_text(r["chunk_text"])
+    #             embeddings.append(emb)
+    #             metas.append(r)
+
+    #     if embeddings:
+    #         store.add(embeddings, metas)
+    #         store.save()
+
+    #         print(f"[FAISS] Stored {len(embeddings)} results from {channel['name']}")
+
+    # except Exception as e:
+    #     print(f"[FAISS ERROR] {e}")
 
     return all_results
+

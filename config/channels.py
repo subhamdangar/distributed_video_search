@@ -56,9 +56,9 @@ COMPUTER_SCIENCE_CHANNELS = [
         "language": "hi",
     },
     {
-        "name": "NPTEL",
-        "channel_id": "UCnEknCMO52EU0d4wYR5CJDQ",
-        "language": "en",
+        "name": "Apna College",
+        "channel_id": "UCBwmMxybNva6P_5VmxjzwqA",
+        "language": "hi",
     },
     
 ]
@@ -155,11 +155,13 @@ MAX_DASK_WORKERS = 8
 #
 # The client (main.py) ALSO runs on Machine 1.
 # ──────────────────────────────────────────────────────────────
-DASK_SCHEDULER_ADDRESS = None
+# DASK_SCHEDULER_ADDRESS = None
+# DASK_SCHEDULER_ADDRESS = "tcp://192.168.0.103:8786"
+DASK_SCHEDULER_ADDRESS = "tcp://192.168.0.106:8786"
 
 # Semantic cache similarity threshold (cosine)
 # Queries with similarity >= this value are considered cache hits
-CACHE_SIMILARITY_THRESHOLD = 0.89
+CACHE_SIMILARITY_THRESHOLD = 0.78
 
 # Number of top results by similarity before ranking by views
 TOP_SIMILARITY_RESULTS = 10

@@ -134,13 +134,23 @@ class Orchestrator:
         logger.info("STAGE 3: Topic Routing")
         logger.info("=" * 60)
 
-        subjects = self.router_agent.route(cleaned_query, query_embedding)
+        subjects = self.router_agent.route(cleaned_query)
         logger.info(f"Routed to subjects: {subjects}")
 
         # Gather all channels to process
+        # channels_to_process = []
+        # for subject in subjects:
+        #     channels = SUBJECT_CHANNELS.get(subject, [])
+        #     channels_to_process.extend(channels)
+        
         channels_to_process = []
+
         for subject in subjects:
             channels = SUBJECT_CHANNELS.get(subject, [])
+            
+            print(f"[SERVER] Selected subject: {subject}")
+            print(f"[SERVER] Using {len(channels)} channels from {subject}")
+            
             channels_to_process.extend(channels)
 
         if not channels_to_process:

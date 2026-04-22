@@ -9,7 +9,9 @@ Uses OpenRouter LLM to classify query into:
 import requests
 
 # 🔴 Paste your API key here
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = (
+    "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"
+)
 
 VALID_SUBJECTS = {"mathematics", "computer_science"}
 
@@ -31,15 +33,15 @@ Query: "{query}"
         "https://openrouter.ai/api/v1/chat/completions",
         headers={
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         },
         json={
             "model": "meta-llama/llama-3-8b-instruct",
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0
-        }
+            "temperature": 0,
+        },
     )
-
+    print(response.json())
     output = response.json()["choices"][0]["message"]["content"].strip().lower()
 
     print(f"[LLM ROUTER] Output: {output}")

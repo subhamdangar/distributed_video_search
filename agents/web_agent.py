@@ -96,23 +96,23 @@ def search_duckduckgo(query: str, max_results: int = None) -> list[dict]:
                         "snippet": r.get("body", ""),
                     })
             return results
-        except ImportError:
-            # Fallback to old package name
-            try:
-                from duckduckgo_search import DDGS
+        # except ImportError:
+        #     # Fallback to old package name
+        #     try:
+        #         from duckduckgo_search import DDGS
 
-                results = []
-                with DDGS() as ddgs:
-                    for r in ddgs.text(q, max_results=max_results):
-                        results.append({
-                            "title": r.get("title", ""),
-                            "url": r.get("href", r.get("link", "")),
-                            "snippet": r.get("body", ""),
-                        })
-                return results
-            except Exception as e:
-                logger.debug(f"WebAgent: DuckDuckGo search error (fallback) for '{q}': {e}")
-                return []
+        #         results = []
+        #         with DDGS() as ddgs:
+        #             for r in ddgs.text(q, max_results=max_results):
+        #                 results.append({
+        #                     "title": r.get("title", ""),
+        #                     "url": r.get("href", r.get("link", "")),
+        #                     "snippet": r.get("body", ""),
+        #                 })
+        #         return results
+            # except Exception as e:
+            #     logger.debug(f"WebAgent: DuckDuckGo search error (fallback) for '{q}': {e}")
+            #     return []
         except Exception as e:
             logger.debug(f"WebAgent: DuckDuckGo search error for '{q}': {e}")
             return []
@@ -238,9 +238,20 @@ def web_search_and_rank(query: str, query_embedding: np.ndarray) -> list[dict]:
 
     # Validate URLs
     search_results = [r for r in search_results if _validate_url(r["url"])]
+    # if not search_results:
+    #     logger.warning("WebAgent: No valid URLs after filtering.")
+    #     return []
+    
     if not search_results:
-        logger.warning("WebAgent: No valid URLs after filtering.")
-        return []
+        logger.warning("WebAgent: No DuckDuckGo results — using query as fallback")
+
+        return [{
+            "title": "No results",
+            "url": "",
+            "snippet": f"No results found for '{query}'",
+            "similarity": 0.0,
+            "is_trusted": False
+        }]
 
     all_chunks = []
     pages_loaded = 0

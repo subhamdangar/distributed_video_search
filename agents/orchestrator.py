@@ -130,43 +130,58 @@ class Orchestrator:
         # ══════════════════════════════════════════════════════
         # Stage 3: Topic Routing
         # ══════════════════════════════════════════════════════
+        
+        
         logger.info("=" * 60)
         logger.info("STAGE 3: Topic Routing")
         logger.info("=" * 60)
 
-        subjects = self.router_agent.route(cleaned_query)
+        route_result = self.router_agent.route(cleaned_query)
+
+        # ─────────────────────────────────────────────
+        # Web fallback (clean + unified)
+        # ─────────────────────────────────────────────
+        if route_result["type"] == "web":
+            logger.info("[ORCHESTRATOR] Routing to WEB fallback")
+            return self._web_fallback(cleaned_query, query_embedding, start_time)
+
+        # ─────────────────────────────────────────────
+        # YouTube flow
+        # ─────────────────────────────────────────────
+        # subjects = route_result["subjects"]
+        subjects = route_result.get("subjects", [])
         logger.info(f"Routed to subjects: {subjects}")
 
         # Gather all channels to process
-        # channels_to_process = []
-        # for subject in subjects:
-        #     channels = SUBJECT_CHANNELS.get(subject, [])
-        #     channels_to_process.extend(channels)
-        
         channels_to_process = []
 
         for subject in subjects:
             channels = SUBJECT_CHANNELS.get(subject, [])
             
-            print(f"[SERVER] Selected subject: {subject}")
-            print(f"[SERVER] Using {len(channels)} channels from {subject}")
+            logger.info(f"[SERVER] Selected subject: {subject}")
+            logger.info(f"[SERVER] Using {len(channels)} channels from {subject}")
             
             channels_to_process.extend(channels)
 
+        # If no channels → fallback
         if not channels_to_process:
             logger.warning("No channels found for routed subjects.")
             return self._web_fallback(cleaned_query, query_embedding, start_time)
 
-        # Remove duplicate channels (same channel_id in multiple subjects)
+        # Remove duplicate channels
         seen_ids = set()
         unique_channels = []
+
         for ch in channels_to_process:
             if ch["channel_id"] not in seen_ids:
                 seen_ids.add(ch["channel_id"])
                 unique_channels.append(ch)
 
-        logger.info(f"Processing {len(unique_channels)} unique channels: "
-                     f"{[c['name'] for c in unique_channels]}")
+        logger.info(
+            f"Processing {len(unique_channels)} unique channels: "
+            f"{[c['name'] for c in unique_channels]}"
+        )
+        
 
         # ══════════════════════════════════════════════════════
         # Stage 4: Dask Parallel Channel Processing
@@ -244,7 +259,11 @@ class Orchestrator:
         logger.info("=" * 60)
         logger.info("STAGE 5: Ranking")
         logger.info("=" * 60)
-
+        
+        if not all_results:
+            logger.warning("No results from any channel. Falling back to web.")
+            return self._web_fallback(cleaned_query, query_embedding, start_time)
+        
         ranked = self.ranking_agent.rank(all_results)
 
         # ══════════════════════════════════════════════════════
@@ -271,7 +290,7 @@ class Orchestrator:
         }
 
         # Store in cache
-        self.cache_agent.store(cleaned_query, query_embedding, formatted)
+        self.cache_agent.store(cleaned_query, query_embedding, result)
 
         logger.info(f"Pipeline complete. ({elapsed:.2f}s)")
         return result

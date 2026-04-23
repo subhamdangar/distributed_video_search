@@ -10,7 +10,7 @@ import requests
 
 # 🔴 Paste your API key here
 OPENROUTER_API_KEY = (
-    "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"
+    "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"
 )
 
 VALID_SUBJECTS = {"mathematics", "computer_science"}
@@ -45,20 +45,55 @@ Query: "{query}"
     output = response.json()["choices"][0]["message"]["content"].strip().lower()
 
     print(f"[LLM ROUTER] Output: {output}")
+    
+    
+    output = output.strip().lower()
 
-    if output not in VALID_SUBJECTS:
-        raise ValueError(f"Invalid subject returned: {output}")
+    valid_subjects = ["computer_science", "maths", "physics"]
+
+    if output not in valid_subjects:
+        return None   # IMPORTANT: no exception
 
     return output
+    
+    
+    # if output not in VALID_SUBJECTS:
+    #     raise ValueError(f"Invalid subject returned: {output}")
+
+    # return output
 
 
 class RouterAgent:
 
-    def route(self, query: str):
-        print(f"[SERVER] Routing query: {query}")
+    # def route(self, query: str):
+    #     print(f"[SERVER] Routing query: {query}")
 
-        subject = llm_route(query)
+    #     subject = llm_route(query)
 
-        print(f"[SERVER] Routing → {subject}")
+    #     print(f"[SERVER] Routing → {subject}")
 
-        return [subject]
+    #     return [subject]
+    
+    # def route(self, query):
+    #     output = llm_route(query).strip().lower()
+
+    #     valid_subjects = ["computer_science", "maths"]  # your subjects
+
+    #     if output in valid_subjects:
+    #         print(f"[ROUTER] → Subject: {output}")
+    #         return {"type": "youtube", "subjects": [output]}
+
+    #     else:
+    #         print(f"[ROUTER] → Fallback to WEB (LLM output: {output})")
+    #         return {"type": "web", "subjects": []}
+        
+        
+    def route(self, query):
+        output = llm_route(query)
+
+        if output is None:
+            print("[ROUTER] → Web fallback triggered")
+            return {"type": "web", "subjects": []}
+
+        print(f"[ROUTER] → Subject: {output}")
+        return {"type": "youtube", "subjects": [output]}

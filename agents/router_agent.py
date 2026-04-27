@@ -10,7 +10,7 @@ import requests
 
 # 🔴 Paste your API key here
 OPENROUTER_API_KEY = (
-    "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"
+    "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"
 )
 
 VALID_SUBJECTS = {"mathematics", "computer_science"}

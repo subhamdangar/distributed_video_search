@@ -169,318 +169,9 @@ def fetch_channel_videos(channel: dict, search_query: str = "") -> list[dict]:
     return videos
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# TIER 1: Transcript-based matching (best precision)
-# ═══════════════════════════════════════════════════════════════════════
-
-
-# def load_transcript(video_id: str, languages: list[str] = None) -> Optional[str]:
-#     """Load transcript. Returns None if unavailable or IP blocked."""
-#     global _ip_blocked
-
-#     if _ip_blocked:
-#         return None
-
-#     languages = languages or ["en", "hi", "en-IN", "hi-Latn"]
-#     url = f"https://www.youtube.com/watch?v={video_id}"
-
-#     # Attempt 1: LangChain YoutubeLoader
-#     try:
-#         from langchain_community.document_loaders import YoutubeLoader
-
-#         loader = YoutubeLoader.from_youtube_url(
-#             url, add_video_info=False, language=languages
-#         )
-#         docs = loader.load()
-#         if docs and docs[0].page_content.strip():
-#             logger.info(f"YouTubeAgent: Transcript loaded via LangChain for {video_id}")
-#             return docs[0].page_content
-#     except Exception as e:
-#         err_str = str(e).lower()
-#         if (
-#             "ipblocked" in err_str
-#             or ("ip" in err_str and "block" in err_str)
-#             or "429" in str(e)
-#         ):
-#             _ip_blocked = True
-#             logger.warning(
-#                 "YouTubeAgent: ⚠️  YouTube IP BLOCKED — switching to chapter-based matching."
-#             )
-#             return None
-#         logger.debug(f"YouTubeAgent: LangChain failed for {video_id}: {e}")
-
-#     # Attempt 2: youtube_transcript_api (v1.x)
-#     try:
-#         from youtube_transcript_api import YouTubeTranscriptApi
-
-#         api = YouTubeTranscriptApi()
-#         transcript_list = api.list(video_id)
-
-#         transcript = None
-#         try:
-#             transcript = transcript_list.find_transcript(languages)
-#         except Exception:
-#             pass
-#         if transcript is None:
-#             try:
-#                 transcript = transcript_list.find_generated_transcript(languages)
-#             except Exception:
-#                 pass
-#         if transcript is None:
-#             try:
-#                 for t in transcript_list:
-#                     transcript = t
-#                     break
-#             except Exception:
-#                 pass
-
-#         if transcript is not None:
-#             fetched = transcript.fetch()
-#             full_text = " ".join(
-#                 (
-#                     snippet.text
-#                     if hasattr(snippet, "text")
-#                     else str(snippet.get("text", ""))
-#                 )
-#                 for snippet in fetched
-#             )
-#             if full_text.strip():
-#                 logger.info(f"YouTubeAgent: Transcript loaded via API for {video_id}")
-#                 return full_text
-
-#     except Exception as e:
-#         err_str = str(e).lower()
-#         if (
-#             "ipblocked" in err_str
-#             or ("ip" in err_str and "block" in err_str)
-#             or "429" in str(e)
-#         ):
-#             _ip_blocked = True
-#             logger.warning(
-#                 "YouTubeAgent: ⚠️  YouTube IP BLOCKED — switching to chapter-based matching."
-#             )
-#             return None
-#         logger.debug(f"YouTubeAgent: API failed for {video_id}: {e}")
-
-#     return None
-
-
-
-
-# ===================================================================================
-#              BELOW PART IS MODIFIED
-# ===================================================================================
-
-
-
-
-
-
-# def load_transcript(video_id: str, languages: list[str] = None) -> Optional[str]:
-#     """Load transcript with robust multi-method fallback."""
-#     global _ip_blocked
-
-#     if _ip_blocked:
-#         return None
-
-#     languages = languages or ["en", "hi", "en-IN", "hi-Latn"]
-#     url = f"https://www.youtube.com/watch?v={video_id}"
-
-#     # ─────────────────────────────────────────────
-#     # Attempt 0: yt-dlp subtitles (NEW - strongest)
-#     # ─────────────────────────────────────────────
-#     try:
-#         with tempfile.TemporaryDirectory() as tmpdir:
-#             output_template = os.path.join(tmpdir, "sub")
-
-#             command = [
-#                 "yt-dlp",
-#                 "--skip-download",
-#                 "--write-auto-sub",
-#                 "--write-sub",
-#                 "--sub-lang", "en",
-#                 "--sub-format", "vtt",
-#                 "--no-warnings",
-#                 "--ignore-errors",
-#                 "--format", "skip",
-#                 "-o", output_template,
-#                 url
-#             ]
-
-#             subprocess.run(command, capture_output=True)
-
-#             # Find VTT file
-#             for file in os.listdir(tmpdir):
-#                 if file.endswith(".vtt"):
-#                     path = os.path.join(tmpdir, file)
-
-#                     with open(path, "r", encoding="utf-8") as f:
-#                         text = f.read()
-
-#                     # Clean VTT → plain text
-#                     text = re.sub(r'\d{2}:\d{2}:\d{2}\.\d+ --> .*', '', text)
-#                     text = re.sub(r'<.*?>', '', text)
-#                     text = re.sub(r'\n+', ' ', text)
-
-#                     if text.strip():
-#                         logger.info(f"YouTubeAgent: Transcript loaded via yt-dlp for {video_id}")
-#                         return text.strip()
-
-#     except Exception as e:
-#         logger.debug(f"YouTubeAgent: yt-dlp failed for {video_id}: {e}")
-
-#     # ─────────────────────────────────────────────
-#     # Attempt 1: LangChain YoutubeLoader (existing)
-#     # ─────────────────────────────────────────────
-#     try:
-#         from langchain_community.document_loaders import YoutubeLoader
-
-#         loader = YoutubeLoader.from_youtube_url(
-#             url, add_video_info=False, language=languages
-#         )
-#         docs = loader.load()
-#         if docs and docs[0].page_content.strip():
-#             logger.info(f"YouTubeAgent: Transcript loaded via LangChain for {video_id}")
-#             return docs[0].page_content
-
-#     except Exception as e:
-#         err_str = str(e).lower()
-#         if (
-#             "ipblocked" in err_str
-#             or ("ip" in err_str and "block" in err_str)
-#             or "429" in str(e)
-#         ):
-#             _ip_blocked = True
-#             logger.warning(
-#                 "YouTubeAgent: ⚠️  YouTube IP BLOCKED — switching to chapter-based matching."
-#             )
-#             return None
-
-#         logger.debug(f"YouTubeAgent: LangChain failed for {video_id}: {e}")
-
-#     # ─────────────────────────────────────────────
-#     # Attempt 2: youtube_transcript_api (existing)
-#     # ─────────────────────────────────────────────
-#     try:
-#         from youtube_transcript_api import YouTubeTranscriptApi
-
-#         api = YouTubeTranscriptApi()
-#         transcript_list = api.list(video_id)
-
-#         transcript = None
-#         try:
-#             transcript = transcript_list.find_transcript(languages)
-#         except Exception:
-#             pass
-#         if transcript is None:
-#             try:
-#                 transcript = transcript_list.find_generated_transcript(languages)
-#             except Exception:
-#                 pass
-#         if transcript is None:
-#             try:
-#                 for t in transcript_list:
-#                     transcript = t
-#                     break
-#             except Exception:
-#                 pass
-
-#         if transcript is not None:
-#             fetched = transcript.fetch()
-#             full_text = " ".join(
-#                 snippet.text if hasattr(snippet, "text")
-#                 else str(snippet.get("text", ""))
-#                 for snippet in fetched
-#             )
-
-#             if full_text.strip():
-#                 logger.info(f"YouTubeAgent: Transcript loaded via API for {video_id}")
-#                 return full_text
-
-#     except Exception as e:
-#         err_str = str(e).lower()
-#         if (
-#             "ipblocked" in err_str
-#             or ("ip" in err_str and "block" in err_str)
-#             or "429" in str(e)
-#         ):
-#             _ip_blocked = True
-#             logger.warning(
-#                 "YouTubeAgent: ⚠️  YouTube IP BLOCKED — switching to chapter-based matching."
-#             )
-#             return None
-
-#         logger.debug(f"YouTubeAgent: API failed for {video_id}: {e}")
-
-#     return None
-
-# def process_video_with_transcript(
-#     video: dict, query_embedding: np.ndarray
-# ) -> list[dict]:
-#     """TIER 1: Transcript-based matching. Returns chunk results with precise timestamps."""
-#     from utils.similarity import compute_similarity
-
-#     transcript = load_transcript(video["video_id"])
-#     if not transcript:
-#         return []
-
-#     transcript = clean_text(transcript)
-#     if len(transcript) < 50:
-#         return []
-
-#     chunks = chunk_text(transcript, TRANSCRIPT_CHUNK_SIZE, TRANSCRIPT_CHUNK_OVERLAP)
-#     if not chunks:
-#         return []
-
-#     chunk_texts = [c["text"] for c in chunks]
-#     chunk_embeddings = embed_texts(chunk_texts)
-
-#     if chunk_embeddings.size == 0:
-#         return []
-
-#     similarities = compute_similarity(query_embedding, chunk_embeddings)
-#     duration = video.get("duration", 0)
-#     total_chars = sum(len(c["text"]) for c in chunks)
-
-#     # ── FILTER: discard chunks below minimum similarity ──
-#     MIN_CHUNK_SIMILARITY = 0.30
-
-#     results = []
-#     for i, chunk_data in enumerate(chunks):
-#         sim = float(similarities[i])
-#         if sim < MIN_CHUNK_SIMILARITY:
-#             continue  # Skip weak chunks early
-
-#         if duration > 0 and total_chars > 0:
-#             timestamp_sec = int((chunk_data["start_char"] / total_chars) * duration)
-#         else:
-#             timestamp_sec = 0
-
-#         timestamp_str = f"{timestamp_sec // 3600:02d}:{(timestamp_sec % 3600) // 60:02d}:{timestamp_sec % 60:02d}"
-
-#         results.append(
-#             {
-#                 "video_id": video["video_id"],
-#                 "title": video["title"],
-#                 "url": video["url"],
-#                 "channel_name": video["channel_name"],
-#                 "view_count": video["view_count"],
-#                 "duration": duration,
-#                 "chunk_text": chunk_data["text"][:200],
-#                 "chunk_index": chunk_data["chunk_index"],
-#                 "timestamp_sec": timestamp_sec,
-#                 "timestamp_str": timestamp_str,
-#                 "timestamp_url": f"{video['url']}&t={timestamp_sec}s",
-#                 "similarity": sim,
-#                 "match_type": "transcript",
-#             }
-#         )
-
-#     return results
-
 
 # ═══════════════════════════════════════════════════════════════════════
-# TIER 2: Chapter-based matching (good precision, works when IP blocked)
+# TIER 1: Chapter-based matching (good precision, works when IP blocked)
 # ═══════════════════════════════════════════════════════════════════════
 
 
@@ -674,7 +365,7 @@ def process_video_with_chapters(video: dict, query_embedding: np.ndarray) -> lis
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# TIER 3: Title-based matching (last resort, no timestamps)
+# TIER 2: Title-based matching (last resort, no timestamps)
 # ═══════════════════════════════════════════════════════════════════════
 
 
@@ -810,17 +501,8 @@ Channel     : {channel['name']}
     for video in videos:
         time.sleep(random.uniform(0.3, 0.6))  # Small delay to reduce YouTube rate-limiting
         try:
-            # TIER 1
-            # results = process_video_with_transcript(video, query_embedding)
-            # if results:
-            #     tier1_count += 1
-            #     for r in results:
-            #         r["title_similarity"] = video["quick_score"]
-            #         r["keyword_score"] = video["keyword_score"]
-            #     all_results.extend(results)
-            #     continue
 
-            # TIER 2
+            # TIER 1
             results = process_video_with_chapters(video, query_embedding)
             if results:
                 tier2_count += 1
@@ -830,7 +512,7 @@ Channel     : {channel['name']}
                 all_results.extend(results)
                 continue
 
-            # TIER 3
+            # TIER 2
             result = process_video_title_only(video, query_embedding)
             if result["similarity"] > 0.35:
                 tier3_count += 1
@@ -849,19 +531,6 @@ Channel     : {channel['name']}
     # ─────────────────────────────────────────────────────────────
     elapsed = time.time() - start_time
 
-#     print(
-#         f"""
-# [WORKER COMPLETE]
-# Host        : {hostname}
-# Channel     : {channel['name']}
-# T1 (transcript) : {tier1_count}
-# T2 (chapters)   : {tier2_count}
-# T3 (title)      : {tier3_count}
-# Total       : {len(all_results)}
-# Time        : {elapsed:.2f}s
-# ---------------------------------------------------
-# """
-#     )
 
 
     print(

@@ -10,7 +10,7 @@ import requests
 
 # 🔴 Paste your API key here
 OPENROUTER_API_KEY = (
-    "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"
+    "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"
 )
 
 VALID_SUBJECTS = {"mathematics", "computer_science"}
@@ -56,38 +56,9 @@ Query: "{query}"
 
     return output
     
-    
-    # if output not in VALID_SUBJECTS:
-    #     raise ValueError(f"Invalid subject returned: {output}")
-
-    # return output
 
 
-class RouterAgent:
-
-    # def route(self, query: str):
-    #     print(f"[SERVER] Routing query: {query}")
-
-    #     subject = llm_route(query)
-
-    #     print(f"[SERVER] Routing → {subject}")
-
-    #     return [subject]
-    
-    # def route(self, query):
-    #     output = llm_route(query).strip().lower()
-
-    #     valid_subjects = ["computer_science", "maths"]  # your subjects
-
-    #     if output in valid_subjects:
-    #         print(f"[ROUTER] → Subject: {output}")
-    #         return {"type": "youtube", "subjects": [output]}
-
-    #     else:
-    #         print(f"[ROUTER] → Fallback to WEB (LLM output: {output})")
-    #         return {"type": "web", "subjects": []}
-        
-        
+class RouterAgent:    
     def route(self, query):
         output = llm_route(query)
 

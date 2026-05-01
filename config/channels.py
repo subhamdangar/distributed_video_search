@@ -155,9 +155,9 @@ MAX_DASK_WORKERS = 8
 #
 # The client (main.py) ALSO runs on Machine 1.
 # ──────────────────────────────────────────────────────────────
+
+
 # DASK_SCHEDULER_ADDRESS = None
-# DASK_SCHEDULER_ADDRESS = "tcp://192.168.0.103:8786"
-# DASK_SCHEDULER_ADDRESS = "tcp://192.168.0.106:8786"
 DASK_SCHEDULER_ADDRESS = "tcp://10.33.178.187:8786"
 
 # Semantic cache similarity threshold (cosine)

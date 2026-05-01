@@ -1,291 +1,344 @@
-# Distributed Video Search System — Demo Troubleshooting Guide
+# Distributed Video Search System
+## Demo Setup & Troubleshooting Guide
 
-## 🎯 Setup Overview
-
-Each group:
-
-- 1 Scheduler (Ubuntu machine)
-- 2 Workers (Ubuntu machines)
-
-Total:
-
-- 4 groups → 12 machines
+> **Platform:** Ubuntu Linux &nbsp;|&nbsp; **All commands run from project root**
 
 ---
 
-## ✅ Step 0: Pre-check (Before Demo Starts)
+### Setup Overview
 
-### On ALL machines:
-
-```bash
-python --version        # Should be 3.10.x
-pip list                # Ensure same packages installed
-```
-
-### Check project runs locally:
-
-```bash
-python main.py
-```
-
-If this fails → fix locally first.
+| Role | Count per Group | Total (4 groups) |
+|------|----------------|------------------|
+| Scheduler | 1 Ubuntu machine | 4 machines |
+| Workers | 2 Ubuntu machines | 8 machines |
+| **Total** | **3 machines** | **12 machines** |
 
 ---
 
-## 🌐 Step 1: Network Verification (MOST COMMON ISSUE)
+## Step 0 — Folder Structure Check
 
-### 🔍 Check and set IP addresses
+Verify the project folder has the **exact same structure** on every machine.
 
-#### On Scheduler:
+**Run on ALL machines:**
+```bash
+ls
+```
+
+**Expected output (must contain):**
+```
+agents/
+config/
+utils/
+main.py
+requirements.txt
+check_requirements.py
+```
+
+> ⚠️ **Important:** Folder names must be **identical** across all machines.
+> If any folder is missing, copy the full project before proceeding.
+
+---
+
+## Step 1 — Check Python Version
+
+Run on **all machines**. Python version must match.
+
+```bash
+python --version
+```
+
+**Expected:**
+```
+Python 3.10.x
+```
+
+> ❌ **Problem:** Version mismatch between machines
+>
+> ✅ **Fix:** Ensure all machines use the same Python version.
+> Use `which python` to confirm the active interpreter.
+
+---
+
+## Step 2 — Scheduler Setup: Verify `main.py` & Create Database
+
+> 🔒 **Scheduler machine only** — Workers do not need this step.
+
+**Verify `main.py` exists:**
+```bash
+ls main.py
+```
+**Expected:**
+```
+main.py
+```
+
+**Create the `db/` folder:**
+```bash
+mkdir -p db
+```
+
+**Create the cache database file:**
+```bash
+touch db/cache.db
+```
+
+**Verify `db/` contents:**
+```bash
+ls db/
+```
+**Expected:**
+```
+cache.db
+```
+
+> ⚠️ **Important:** This step is **only** for the Scheduler machine.
+
+---
+
+## Step 3 — Create & Activate Virtual Environment
+
+Do this on **every machine** inside the project root.
+
+**Create venv:**
+```bash
+python -m venv venv
+```
+
+**Activate venv:**
+```bash
+source venv/bin/activate
+```
+
+**Install dependencies:**
+```bash
+pip install -r requirements.txt
+```
+
+> ⚠️ **Important:** Always activate venv before running **any** command.
+> Your prompt should show `(venv)` at the start of the line.
+
+---
+
+## Step 4 — Get OpenRouter API Key (Free)
+
+OpenRouter provides free LLM API access. Follow these steps:
+
+| # | Action | Detail |
+|---|--------|--------|
+| 1 | Go to | https://openrouter.ai |
+| 2 | Click | Sign Up → create a free account |
+| 3 | Go to | Dashboard → API Keys → Create Key |
+| 4 | Copy | your API key |
+| 5 | Open | `config.py` and paste the key |
+
+**In `config.py` set:**
+```python
+OPENROUTER_API_KEY = "sk-or-xxxxxxxxxxxxxxxxxxxx"
+```
+
+---
+
+## Step 5 — Run Requirement Check
+
+Run on **all machines** to verify all packages are correctly installed.
+
+```bash
+python check_requirements.py
+```
+
+**Expected output (all passing):**
+```
+[OK] langchain
+[OK] dask
+[OK] distributed
+[OK] sentence_transformers
+[OK] All requirements satisfied.
+```
+
+> ❌ **Problem:** `ModuleNotFoundError` or `[FAIL]` for any package
+>
+> ✅ **Fix:**
+> ```bash
+> pip install -r requirements.txt   # inside activated venv
+> python check_requirements.py      # re-run to verify
+> ```
+
+---
+
+## Step 6 — Check Working Directory
+
+> ⚠️ **All commands must be run from the project root.** Verify before each command.
+
+```bash
+pwd
+```
+
+**Expected (example):**
+```
+/home/user/distributed-video-search
+```
+
+> ⚠️ **Important:** Never run `dask scheduler` / `dask worker` from a sub-directory.
+> Always `cd /path/to/project` first.
+
+---
+
+## Step 7 — Network Verification
+
+Run on **Scheduler** and **each Worker** to find the correct LAN IP.
 
 ```bash
 ifconfig | grep inet
 ```
 
-Look for:
-
-```text
-inet 10.x.x.x OR 192.168.x.x
+**Look for (LAN IP):**
+```
+inet 10.x.x.x     OR     inet 192.168.x.x
 ```
 
-#### On Workers:
-
-```bash
-ifconfig | grep inet
-```
+> ⚠️ **Important:**
+> - Do **NOT** use `127.0.0.1` — this is loopback (local only).
+> - Write down the Scheduler's LAN IP — you will need it in Steps 9 and 10.
 
 ---
 
-### ✅ Test connectivity
+## Step 8 — Test Connectivity
 
-From Worker:
+From **each Worker machine**, ping the Scheduler to confirm network reach.
 
 ```bash
 ping <scheduler_ip>
 ```
 
-### ❌ Problem:
-
-```text
-Destination Host Unreachable
+**Expected:**
+```
+64 bytes from <scheduler_ip>: icmp_seq=1 ttl=64 time=0.4 ms
 ```
 
-### 🧠 Cause:
-
-- Different WiFi networks
-- Wrong IP used
-
-### ✅ Fix:
-
-- Connect all machines to SAME WiFi
-- Use correct IP (not 127.0.0.1)
+> ❌ **Problem:** `Destination Host Unreachable`
+>
+> ✅ **Fix:**
+> - Connect **all machines** to the **same WiFi / LAN** network.
+> - Double-check the IP — use `ifconfig` output, not `127.0.0.1`.
 
 ---
 
-## 🔥 Step 2: Start Scheduler
+## Step 9 — Start Scheduler
 
-### ⚠️ Important: Start scheduler with PYTHONPATH inline (prevents import issues)
+> 🔒 **Scheduler machine only.**
 
-#### 🔧 Step 2.1 — Stop any running scheduler
-
-```bash
-# If running, stop with Ctrl + C
-```
-
-#### 🔧 Step 2.2 — Start scheduler with PYTHONPATH inline
+Always use `PYTHONPATH` **inline** — not via `export`.
 
 ```bash
-PYTHONPATH=/path/to/your/project dask scheduler
+PYTHONPATH=$(pwd) dask scheduler
 ```
 
-Example:
+| ❌ May NOT work | ✅ Guaranteed to work |
+|----------------|----------------------|
+| `export PYTHONPATH=$(pwd)` then `dask scheduler` | `PYTHONPATH=$(pwd) dask scheduler` |
 
-```bash
-PYTHONPATH=/home/user/distributed-video-search dask scheduler
+**Expected output:**
 ```
-
-#### ⚠️ Why this matters
-
-- ❌ This may NOT propagate correctly:
-
-```bash
-export PYTHONPATH=/path/to/project
-dask scheduler
-```
-
-- ✔ This guarantees the scheduler process sees it:
-
-```bash
-PYTHONPATH=/path/to/project dask scheduler
-```
-
-#### 🔧 Step 2.3 — Verify scheduler started
-
-Expected:
-
-```text
-Scheduler at: tcp://<IP>:8786
-Dashboard at: http://<IP>:8787
+Scheduler at:  tcp://<IP>:8786
+Dashboard at:  http://<IP>:8787
 ```
 
 ---
 
-## 🔧 Step 3: Connect Workers
+## Step 10 — Set Scheduler IP in `config.py`
 
-On each Worker:
+Update **`config.py` on ALL machines** (Scheduler + Workers) with the Scheduler's IP from Step 7.
 
-```bash
-dask worker tcp://<scheduler_ip>:8786
+```python
+SCHEDULER_IP = "10.x.x.x"    # Replace with actual Scheduler IP
 ```
+
+> ⚠️ **Important:**
+> - This must be the **same IP** on every machine.
+> - Use the IP from `ifconfig` output on the Scheduler (Step 7).
 
 ---
 
-### ✅ Verify connection
+## Step 11 — Connect Workers
 
-On Scheduler terminal:
+Run on **each Worker machine** after Scheduler is confirmed running.
 
-```text
+```bash
+PYTHONPATH=$(pwd) dask worker tcp://<scheduler_ip>:8786
+```
+
+**Verify — Scheduler terminal should show:**
+```
 Workers: 2
 ```
 
-OR open browser:
-
-```text
+Or open the Dask dashboard in a browser on the Scheduler:
+```
 http://<scheduler_ip>:8787
 ```
 
+> ❌ **Problem:** `Waiting to connect...` (worker hangs)
+>
+> ✅ **Fix:**
+> - `ping <scheduler_ip>` must succeed from Worker.
+> - Confirm Scheduler is running (Step 9).
+> - Temporarily disable firewall: `sudo ufw disable`
+
+> ❌ **Problem:** `No module named 'agents'`
+>
+> ✅ **Fix:**
+> - Use `PYTHONPATH=$(pwd)` inline — not via `export`.
+> - Confirm `pwd` is the project root before running.
+
 ---
 
-## 🚫 Problem 1: Worker not connecting
+## Step 12 — Run `main.py` (Scheduler Only)
 
-### Symptom:
-
-```text
-Waiting to connect...
-```
-
-### Causes:
-
-- Wrong IP
-- Firewall blocking
-- Scheduler not running
-
-### Fix:
+Once all workers are connected, run the system from the **Scheduler machine**.
 
 ```bash
-ping <scheduler_ip>   # must work
+python main.py
 ```
 
-Disable firewall (temporary):
-
-```bash
-sudo ufw disable
+**Expected log output (Worker terminals):**
 ```
-
----
-
-## 🚫 Problem 2: ModuleNotFoundError (agents)
-
-### Symptom:
-
-```text
-No module named 'agents'
-```
-
-### Fix (quick):
-
-```bash
-cd /path/to/project
-export PYTHONPATH=$(pwd)
-dask worker tcp://<scheduler_ip>:8786
-```
-
----
-
-## 🚫 Problem 3: Python version mismatch
-
-### Symptom:
-
-```text
-VersionMismatchWarning
-```
-
-### Fix:
-
-```text
-IGNORE (safe)
-```
-
----
-
-## 🔍 Step 4: Verify System is Working
-
-### Check 1: Scheduler dashboard
-
-```text
-http://<scheduler_ip>:8787
-```
-
-### Check 2: Worker logs
-
-```text
 Stage 1 START
 Stage 1 DONE
-```
-
-### Check 3: Final output
-
-```text
+...
 RESULT
 ```
+
+> ⚠️ **Important:**
+> - Run **only** on Scheduler — never on Worker machines.
+> - All Workers must be connected before this step.
+
+---
+
+## ✅ You Are Safe If:
+
+- [ ] Folder structure is identical on all machines
+- [ ] `main.py` present on Scheduler; `db/cache.db` created
+- [ ] `venv` activated and requirements installed on all machines
+- [ ] OpenRouter API key set in `config.py`
+- [ ] `check_requirements.py` passes on all machines
+- [ ] `pwd` is project root on all machines
+- [ ] Ping from Worker to Scheduler works
+- [ ] `PYTHONPATH=$(pwd)` used inline — not via `export`
+- [ ] Scheduler running — `tcp://<IP>:8786` confirmed
+- [ ] Scheduler IP set in `config.py` on ALL machines
+- [ ] Workers connected — `Workers: 2` visible on Scheduler
+- [ ] `main.py` running on Scheduler — `RESULT` seen in logs
 
 ---
 
 ## 🎯 Final Demo Line
 
-> “We use a scheduler–worker architecture. Tasks are distributed across workers, executed concurrently, and results are aggregated efficiently.”
+> *"We use a scheduler–worker architecture. Queries are distributed across workers, executed concurrently via Dask, and results are semantically reranked and aggregated on the scheduler."*
 
 ---
 
-## ✅ You are safe if:
+<div align="center">
 
-✔ Ping works  
-✔ Workers connected  
-✔ PYTHONPATH set  
-✔ Scheduler running
+**Distributed Video Search System &nbsp;•&nbsp; Demo Guide &nbsp;•&nbsp; Ubuntu Linux**
 
----
-
-## 🔧 Cross-Platform Notes (Windows + macOS)
-
-### Windows (PowerShell)
-
-```powershell
-$env:PYTHONPATH="C:\path\to\project"
-dask scheduler
-```
-
-### macOS / Linux
-
-```bash
-export PYTHONPATH=$(pwd)
-python -m distributed.cli.dask_worker tcp://<scheduler_ip>:8786
-```
-
-### Important
-
-- Folder names can differ across machines
-- Structure MUST be identical:
-
-```text
-agents/
-config/
-utils/
-main.py
-```
-
-- Always run from project root
-
----
-
-**End of Guide**
+</div>

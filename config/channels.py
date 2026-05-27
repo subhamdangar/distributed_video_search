@@ -154,7 +154,7 @@ MAX_DASK_WORKERS = 8
 #     DASK_SCHEDULER_ADDRESS = "tcp://MACHINE_1_IP:8786"
 #
 # The client (main.py) ALSO runs on Machine 1.
-# ──────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────
 
 
 # DASK_SCHEDULER_ADDRESS = None

@@ -7,11 +7,19 @@ Uses OpenRouter LLM to classify query into:
 """
 
 import requests
+import os
+from dotenv import load_dotenv
 
-# 🔴 Paste your API key here
-OPENROUTER_API_KEY = (
-    "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"
-)
+load_dotenv()
+
+
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+
+if not OPENROUTER_API_KEY:
+    raise ValueError("OPENROUTER_API_KEY not found")
+
+
 
 VALID_SUBJECTS = {"mathematics", "computer_science"}
 
@@ -49,9 +57,7 @@ Query: "{query}"
     
     output = output.strip().lower()
 
-    valid_subjects = ["computer_science", "maths", "physics"]
-
-    if output not in valid_subjects:
+    if output not in VALID_SUBJECTS:
         return None   # IMPORTANT: no exception
 
     return output

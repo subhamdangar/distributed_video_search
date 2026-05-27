@@ -121,19 +121,38 @@ pip install -r requirements.txt
 
 ## Step 4 — Get OpenRouter API Key (Free)
 
-OpenRouter provides free LLM API access. Follow these steps:
+OpenRouter provides free LLM API access for query routing.
 
 | # | Action | Detail |
 |---|--------|--------|
 | 1 | Go to | https://openrouter.ai |
-| 2 | Click | Sign Up → create a free account |
-| 3 | Go to | Dashboard → API Keys → Create Key |
-| 4 | Copy | your API key |
-| 5 | Open | `config.py` and paste the key |
+| 2 | Click | Sign Up and create a free account |
+| 3 | Open | Dashboard → API Keys |
+| 4 | Click | Create Key |
+| 5 | Copy | your generated API key |
+| 6 | Create | a `.env` file in the project root |
+| 7 | Paste | the API key inside the `.env` file |
 
-**In `config.py` set:**
-```python
-OPENROUTER_API_KEY = "sk-or-xxxxxxxxxxxxxxxxxxxx"
+---
+
+### Example `.env`
+
+```env
+OPENROUTER_API_KEY=sk-or-xxxxxxxxxxxxxxxxxxxx
+```
+
+---
+
+### Example Project Structure
+
+```text
+.
+├── .env
+├── main.py
+├── agents/
+├── config/
+├── utils/
+└── requirements.txt
 ```
 
 ---

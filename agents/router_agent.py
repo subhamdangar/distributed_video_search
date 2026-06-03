@@ -44,9 +44,10 @@ Query: "{query}"
             "Content-Type": "application/json",
         },
         json={
-            "model": "meta-llama/llama-3-8b-instruct",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0,
+            "model": "openai/gpt-oss-120b:free",
+            "messages": [
+                {"role": "user", "content": prompt}
+            ]
         },
     )
     print(response.json())
